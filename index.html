@@ -1,11 +1,58 @@
-<html>
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-nft.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/dist/aframe_raset.min.js"></script>
-  
-<body style="margin:0px;overflow:hidden;">
-  <h1>NISHA</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>WEB AR NISHA</title>
+<meta name="viewport" content="width=device-width, initial_scale=1.0">
+<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
+<script "nomodule" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
+</script>
+<style>
+*{
+	margin:0;
+ 	padding:0;
+}
+.demo{
+	height:100vh;
+	width:50%;
+}
+.demo model-viewer{
+	width:50%;
+	height:50%
+
+}
+.btn-container{
+	position:absolute;
+	bottom:50px;
+	width:100%;
+	text-align:center;
+}
+
+</style>
+
+</head>
+<body>
+<div class="demo">
+<model-viewer id="model" src= " RobotExpressive.glb"  auto-rotate camera-controls skybox-image="Stadium.hdr"  animation-name="Running" autoplay ar></model-viewer>
+<div class="btn-container">
+<button type="button" onclick="stop()">STOP</button>
+<button type="button" onclick="run()">RUN</button>
+<button type="button" onclick="wave()">WAVE</button>
+</div>
+</div>
+<script>
+var modelViewer=document.getElementById('model');
+function stop()
+{
+modelViewer.animationName='none';
+}
+function run()
+{
+modelViewer.animationName='Running';
+}
+function stop()
+{
+modelViewer.animationName='Wave';
+}
+</script>
 </body>
 </html>
