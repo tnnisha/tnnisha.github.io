@@ -8,12 +8,15 @@
     <script src="https://unpkg.com/aframe-environment-component@1.1.0/dist/aframe-environment-component.min.js"></script>
   </head>
   <body>
-    <a-scene background="color: #FAFAFA" environment="preset: forest">
+    <a-scene background="color: #FAFAFA">
       <a-entity id="mouseCursor" cursor="rayOrigin: mouse" raycaster="objects: #box"></a-entity>
       
-      <a-entity id="box" geometry="primitive: box" material="color: red" position="0 1.8 -3" rotation="0 30 0"
-                animation__mouseenter="property: components.material.material.color; type: color; from: red; to: blue; startEvents: mouseenter; dur: 500"
-                animation__mouseleave="property: components.material.material.color; type: color; from: blue; to: red; startEvents: mouseleave; dur: 500"
+      <a-entity id="box" geometry="primitive: box" material="color: red" position="0 0 0" rotation="0 30 0"
+                animation__mouseenter="property: components.material.material.color; type: color; from: red; to: blue; startEvents: mouseenter; dur: 5000"
+                animation__mouseleave="property: components.material.material.color; type: color; from: blue; to: red; startEvents: mouseleave; dur: 5000">
+     </a-entity>   
     </a-scene>
   </body>
 </html>
+  
+  
