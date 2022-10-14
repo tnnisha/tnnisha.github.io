@@ -8,11 +8,12 @@
     <a-scene>
       <a-entity id="mouseCursor" cursor="rayOrigin: mouse"></a-entity>
       <a-entity gltf-model="KAPPAL_TRY.glb" scale="3 3 3" position="0 0 0" 
-      animation__mouseenter="property:rotation; easing:linear; dur:60000; to:0 360 0; loop:true";></a-entity> 
+      animation__mouseenter="property:rotation; easing:linear; startEvents: mouseenter; dur:60000; to:0 360 0; loop:true"></a-entity> 
        <a-sky color="#F10000"></a-sky>
     </a-scene>
   </body>
 </html>
 
 
-
+animation__mouseenter="property: components.material.material.color; type: color; to: blue;  dur: 500";
+ 
