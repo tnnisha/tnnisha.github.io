@@ -6,10 +6,8 @@
   </head>
   <body>
     <a-scene  background="color: #FF00AA">
-      <a-entity id="mouseCursor" cursor="rayOrigin: mouse"></a-entity>
-      <a-entity gltf-model="KAPPAL_TRY.glb" scale="3 3 3" position="0 0 0" 
-      animation__mouseenter="property:rotation; easing:linear; dur:60000; to:0 360 0" startEvents: mouseenter"
-      animation__mouseleave="property:rotation; easing:linear; dur:60000; to:0 0 0" startEvents: mouseleave">
+     <a-entity gltf-model="KAPPAL_TRY.glb" scale="3 3 3" position="0 0 0">
+     <a-animation attribute="scale" duration="1000" from="3 3 3" to="1 1 1" direction="alternate-reverse" repeat="indefinite"></a-animation>  
      </a-entity>               
                 
     </a-scene>
