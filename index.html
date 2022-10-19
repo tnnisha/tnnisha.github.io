@@ -85,95 +85,393 @@
     <title>WebXR - Proposals</title>
   </head>
   <body>
+    
+    <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+    <meta name='mobile-web-app-capable' content='yes'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
 
-    <div class='container' id='container'>
-      <header class='header'>
-        <div id='nav'>
-            <a href='../'>Samples</a>
-            <a href='../layers-samples/'>Layers Samples</a>
-            <a href='./' class='selected'>Proposals</a>
-            <a href='../tests/'>Test Pages</a>
-            <a href='../report/'>Report</a>
-        </div>
+    <meta http-equiv="origin-trial" content="Ahfj+MLeL6bh+LNmpnSdepftxoDHHwjUG2KWZ4jjCb1WoZxtBlzF3cDHuJNVqnhr3HXJwQ+kLaw57NO15S0mRwwAAABkeyJvcmlnaW4iOiJodHRwczovL2ltbWVyc2l2ZS13ZWIuZ2l0aHViLmlvOjQ0MyIsImZlYXR1cmUiOiJXZWJYUlBsYW5lRGV0ZWN0aW9uIiwiZXhwaXJ5IjoxNjI5ODQ5NTk5fQ==">
 
-        <h1>
-          <a href='' class='wordmark'>
-            <img src='../media/logo/webxr-logo.svg' alt='WebXR Logo'/>
-          </a>
-        </h1>
-        <h2 class='tagline'>Proposals</h2>
-      </header>
+    <title>AR Plane Detection</title>
 
-      <main class='main' id='main'>
-        <p>These pages test features which have been proposed and are in development but have
-          not yet been adopted into the core WebXR Device API. They may have varying support
-          across WebXR-compatible browsers, and the APIs presented here are assumed to be
-          in flux.<br/>
+    <link href='../css/common.css' rel='stylesheet'></link>
 
-        <script>
-          let pages = [
-            { title: 'AR Depth Sensing - GPU access', category: 'AR',
-              path: 'phone-ar-depth-gpu.html',
-              description: 'Demonstrates use of a depth API in an immersive-ar session. ' +
-                           'The data will be uploaded to the GPU & accessed from a shader to visualize the depth map.' },
+  </head>
+  <body>
+    <script type="module">
+      import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
+      import {WebXRButton} from '../js/util/webxr-button.js';
+      import {hitTest, filterHitTestResults} from '../js/hit-test.js';
 
-            { title: 'AR Depth Sensing - CPU access', category: 'AR',
-              path: 'phone-ar-depth.html',
-              description: 'Demonstrates use of a depth API in an immersive-ar session. ' +
-                           'The data will be accessed on the CPU.' },
+      const usePlaneOrigin = document.getElementById('usePlaneOrigin');
 
-            { title: 'AR Plane Detection', category: 'AR',
-              path: 'plane-detection.html',
-              description: 'Demonstrates use of a plane detection API in an immersive-ar session. ' +
-                           'Implements JavaScript-level hit-test and leverages the Anchors API.' },
-          ];
+      const allPlaneOrigins = [];
+      usePlaneOrigin.addEventListener('input', element =>{
+        console.log("Changing state of plane origins");
+        allPlaneOrigins.forEach(group => {
+          group.visible = usePlaneOrigin.checked
+        });
+      });
 
-          let mainElement = document.getElementById("main");
+      // Suppress XR events for interactions with the DOM overlay
+      document.querySelector('header').addEventListener('beforexrselect', (ev) => {
+        console.log(ev.type);
+        ev.preventDefault();
+      });
 
-          // Append an element for every item in the pages list.
-          for (var i = 0; i < pages.length; ++i) {
-            var page = pages[i];
+      let xrButton = null;
 
-            let article = document.createElement('article');
+      let container;
+      let camera, scene, renderer;
 
-            let title = document.createElement('h3');
-            title.setAttribute('data-index', i + 1);
+      let reticle;
+      // hitResult will be set when reticle is visible:
+      let hitResult;
 
-            let titleLink = document.createElement('a');
-            titleLink.href = page.path;
-            titleLink.textContent = page.title;
-            title.appendChild(titleLink);
-            article.appendChild(title);
+      const planeMaterials = [];
+      const lineMaterials = [
+        new THREE.LineBasicMaterial({color: 0xff0000}),
+        new THREE.LineBasicMaterial({color: 0x00ff00}),
+        new THREE.LineBasicMaterial({color: 0x0000ff}),
+      ];
 
-            let category = document.createElement('h4');
-            category.textContent = page.category;
-            article.appendChild(category);
+      const lineGeometries = [
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(5,0,0)]),
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,5,0)]),
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,5)]),
+      ];
 
-            let description = document.createElement('p');
-            description.textContent = page.description;
-            article.appendChild(description);
+      const baseOriginGroup = new THREE.Group();
+      baseOriginGroup.add(new THREE.Line(lineGeometries[0], lineMaterials[0]));
+      baseOriginGroup.add(new THREE.Line(lineGeometries[1], lineMaterials[1]));
+      baseOriginGroup.add(new THREE.Line(lineGeometries[2], lineMaterials[2]));
 
-            let links = document.createElement('div');
-            links.classList.add('links');
+      init();
 
-            let sourceLink = document.createElement('a');
-            sourceLink.href = 'https://github.com/immersive-web/webxr-samples/blob/master/proposals/' + page.path;
-            sourceLink.textContent = 'Source';
-            links.appendChild(sourceLink);
+      function init() {
 
-            article.appendChild(links);
+        container = document.createElement('div');
+        document.body.appendChild(container);
 
-            mainElement.appendChild(article);
+        scene = new THREE.Scene();
+
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+        light.position.set(0.5, 1, 0.25);
+        scene.add(light);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight );
+        renderer.xr.enabled = true;
+        renderer.autoClear = false;
+        container.appendChild(renderer.domElement);
+
+        xrButton = new WebXRButton({
+          onRequestSession: onRequestSession,
+          onEndSession: onEndSession,
+          textEnterXRTitle: "START AR",
+          textXRNotFoundTitle: "AR NOT FOUND",
+          textExitXRTitle: "EXIT AR",
+        });
+
+        document.querySelector('header').appendChild(xrButton.domElement);
+
+        if (navigator.xr) {
+          navigator.xr.isSessionSupported('immersive-ar')
+                      .then((supported) => {
+            xrButton.enabled = supported;
+          });
+        }
+
+        reticle = new THREE.Mesh(
+          new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
+          new THREE.MeshBasicMaterial()
+        );
+        reticle.matrixAutoUpdate = false;
+        reticle.visible = false;
+        scene.add(reticle);
+
+        const loadManager = new THREE.LoadingManager();
+        const loader = new THREE.TextureLoader(loadManager);
+        const gridTexture = loader.load('https://raw.githubusercontent.com/google-ar/arcore-android-sdk/c684bbda37e44099c273c3e5274fae6fccee293c/samples/hello_ar_c/app/src/main/assets/models/trigrid.png');
+        gridTexture.wrapS = THREE.RepeatWrapping;
+        gridTexture.wrapT = THREE.RepeatWrapping;
+
+        const createPlaneMaterial = (params) => 
+          new THREE.MeshBasicMaterial(Object.assign(params, {
+            map: gridTexture,
+            opacity: 0.5,
+            transparent: true,
+          }));
+        planeMaterials.push(createPlaneMaterial({color: 0xff0000}));
+        planeMaterials.push(createPlaneMaterial({color: 0x00ff00}));
+        planeMaterials.push(createPlaneMaterial({color: 0x0000ff}));
+        planeMaterials.push(createPlaneMaterial({color: 0xffff00}));
+        planeMaterials.push(createPlaneMaterial({color: 0x00ffff}));
+        planeMaterials.push(createPlaneMaterial({color: 0xff00ff}));
+
+        window.addEventListener('resize', onWindowResize);
+      }
+
+      function onRequestSession() {
+        let sessionInit = {
+          requiredFeatures: ['anchors', 'plane-detection'],
+          optionalFeatures: [],
+        };
+        if (useDomOverlay.checked) {
+          sessionInit.optionalFeatures.push('dom-overlay');
+          sessionInit.domOverlay = {root: document.body};
+        }
+        navigator.xr.requestSession('immersive-ar', sessionInit).then((session) => {
+          session.mode = 'immersive-ar';
+          xrButton.setSession(session);
+          onSessionStarted(session);
+        });
+      }
+
+      function onSessionStarted(session) {
+        useDomOverlay.disabled = true;
+        session.addEventListener('end', onSessionEnded);
+        session.addEventListener('select', onSelect);
+
+        renderer.xr.setReferenceSpaceType('local');
+        renderer.xr.setSession(session);
+
+        renderer.setAnimationLoop(render);
+      }
+
+      function onEndSession(session) {
+        session.end();
+      }
+
+      function onSessionEnded(event) {
+        useDomOverlay.disabled = false;
+        xrButton.setSession(null);
+
+        renderer.setAnimationLoop(null);
+        renderer.xr.setSession(null)
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      let anchorId = 1;
+      let allAnchors = new Map();
+
+      function processAnchors(timestamp, frame) {
+        const referenceSpace = renderer.xr.getReferenceSpace();
+
+        if (frame.trackedAnchors) {
+          allAnchors.forEach((anchorContext, anchor) => {
+            if (!frame.trackedAnchors.has(anchor)) {
+              // anchor was removed
+              allAnchors.delete(anchor);
+              console.debug("Anchor no longer tracked, id=" + anchorContext.id);
+
+              scene.remove(anchorContext.mesh);
+            }
+          });
+
+          frame.trackedAnchors.forEach(anchor => {
+            if (allAnchors.has(anchor)) {
+              const anchorContext = allAnchors.get(anchor);
+              const anchorPose = frame.getPose(anchor.anchorSpace, referenceSpace);
+              // update pose
+              if (anchorPose) {
+                anchorContext.mesh.visible = true;
+                anchorContext.mesh.matrix.fromArray(anchorPose.transform.matrix);
+              } else {
+                anchorContext.mesh.visible = false;
+              }
+            } else {
+              console.error("New anchors should be processed in a createAnchor(...).then() promise");
+            }
+          });
+        }
+      }
+
+      const geometry = new THREE.CylinderGeometry(0.1, 0.1, 0.2, 32).translate(0, 0.1, 0);
+
+      function onSelect(event) {
+        if (reticle.visible) {
+          const material = new THREE.MeshPhongMaterial({ color: 0xffffff * Math.random()});
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.scale.y = Math.random() * 2 + 1;
+          mesh.visible = false;
+          mesh.matrixAutoUpdate = false;
+
+          // Reticle matrix is expressed relative to `referenceSpace`, but we need to
+          // pass a pose relative to the plane space. Luckily, our JS-side hit test
+          // contains that information as well.
+          event.frame.createAnchor(
+            new XRRigidTransform(hitResult.point_on_plane),
+            hitResult.plane.planeSpace)
+          .then((anchor) => {
+            scene.add(mesh);
+
+            // new anchor created:
+            const anchorContext = {
+              id: anchorId,
+              mesh: mesh,
+            }
+
+            allAnchors.set(anchor, anchorContext);
+            console.debug("New anchor created, id=" + anchorId);
+            anchorId++;
+          });
+        }
+      }
+
+      function createGeometryFromPolygon(polygon) {
+        const geometry = new THREE.BufferGeometry();
+
+        const vertices = [];
+        const uvs = [];
+        polygon.forEach(point => {
+          vertices.push(point.x, point.y, point.z);
+          uvs.push(point.x, point.z);
+        })
+
+        const indices = [];
+        for(let i = 2; i < polygon.length; ++i) {
+          indices.push(0, i-1, i);
+        }
+
+        geometry.setAttribute('position',
+          new THREE.BufferAttribute(new Float32Array(vertices), 3));
+        geometry.setAttribute('uv',
+          new THREE.BufferAttribute(new Float32Array(uvs), 2))
+        geometry.setIndex(indices);
+
+        return geometry;
+      }
+
+      let planeId = 1;
+      let allPlanes = new Map();
+      function processPlanes(timestamp, frame) {
+        const referenceSpace = renderer.xr.getReferenceSpace();
+
+        if (frame.detectedPlanes) {
+          allPlanes.forEach((planeContext, plane) => {
+            if (!frame.detectedPlanes.has(plane)) {
+              // plane was removed
+              allPlanes.delete(plane);
+              console.debug("Plane no longer tracked, id=" + planeContext.id);
+
+              scene.remove(planeContext.mesh);
+            }
+          });
+
+          frame.detectedPlanes.forEach(plane => {
+            const planePose = frame.getPose(plane.planeSpace, referenceSpace);
+            let planeMesh;
+
+            if (allPlanes.has(plane)) {
+              // may have been updated:
+              const planeContext = allPlanes.get(plane);
+              planeMesh = planeContext.mesh;
+
+              if (planeContext.timestamp < plane.lastChangedTime) {
+                // updated!
+                planeContext.timestamp = plane.lastChangedTime;
+
+                const geometry = createGeometryFromPolygon(plane.polygon);
+                planeContext.mesh.geometry.dispose();
+                planeContext.mesh.geometry = geometry;
+              }
+            } else {
+              // new plane
+              
+              // Create geometry:
+              const geometry = createGeometryFromPolygon(plane.polygon);
+              planeMesh = new THREE.Mesh(geometry,
+                planeMaterials[planeId % planeMaterials.length]
+              );
+              
+              planeMesh.matrixAutoUpdate = false;
+
+              scene.add(planeMesh);
+
+              // Create plane origin visualizer:
+              const originGroup = baseOriginGroup.clone();
+              originGroup.visible = usePlaneOrigin.checked;
+
+              planeMesh.add(originGroup);
+              allPlaneOrigins.push(originGroup);
+
+              const planeContext = {
+                id: planeId,
+                timestamp: plane.lastChangedTime,
+                mesh: planeMesh,
+                origin: originGroup,
+              };
+
+              allPlanes.set(plane, planeContext);
+              console.debug("New plane detected, id=" + planeId);
+              planeId++;
+            }
+
+            if (planePose) {
+              planeMesh.visible = true;
+              planeMesh.matrix.fromArray(planePose.transform.matrix);
+            } else {
+              planeMesh.visible = false;
+            }
+          });
+        }
+      }
+
+      function render(timestamp, frame) {
+        if (frame) {
+          processAnchors(timestamp, frame);
+          processPlanes(timestamp, frame);
+
+          const referenceSpace = renderer.xr.getReferenceSpace();
+          const session = renderer.xr.getSession();
+
+          reticle.visible = false;
+          hitResult = null;
+
+          const pose = frame.getViewerPose(referenceSpace);
+          if (pose) {
+            const ray = new XRRay(pose.transform);
+
+            // Perform a JS-side hit test against mathematical (infinte) planes:
+            const hitTestResults = hitTest(frame, ray, referenceSpace);
+            // Filter results down to the ones that fall within plane's polygon:
+            const hitTestFiltered = filterHitTestResults(hitTestResults);
+
+            if (hitTestFiltered && hitTestFiltered.length > 0) {
+              hitResult = hitTestFiltered[0];
+
+              const hitMatrix = hitResult.hitMatrix;
+
+              hitMatrix[12] += 0.001; // move the reticle slightly away from the plane
+              hitMatrix[13] += 0.001; // center to prevent z-fighting with plane meshes
+              hitMatrix[14] += 0.001;
+
+              reticle.visible = true;
+
+              reticle.matrix.fromArray(hitMatrix);
+            }
           }
-        </script>
-      </main>
 
-      <br/>
+          renderer.render(scene, camera);
+        }
+      }
 
-      <h3><a class='github-link' href='https://github.com/immersive-web/webxr-samples'>View source on GitHub</a></h3>
-
-      <footer class='footer'>
-      </footer>
-    </div>
+    </script>
   </body>
 </html>
+
+    
