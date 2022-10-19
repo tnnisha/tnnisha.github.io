@@ -8,10 +8,10 @@
     <link rel='icon' type='image/png' sizes='32x32' href='favicon-32x32.png'>
     <link rel='icon' type='image/png' sizes='96x96' href='favicon-96x96.png'>
     <link rel='stylesheet' href='css/common.css'>
-
+    <script src="https://cdnjs.cloudfare.com/ajax/libs/three.js/r126/three.js" crossorigin="anonymous"></script>
     <title>Hit Test1</title>
   </head>
-  <body onload=" initXR();">
+  <body>
     <script type="module">
       import {WebXRButton} from './js/util/webxr-button.js';
       import {Scene} from './js/render/scenes/scene.js';
@@ -183,7 +183,7 @@
 
         scene.endFrame();
       }
-
+       initXR();
       // Start the XR application.
      </script>
   </body>
