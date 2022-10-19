@@ -9,11 +9,21 @@
     <link rel='icon' type='image/png' sizes='96x96' href='favicon-96x96.png'>
     <link rel='stylesheet' href='css/common.css'>
     <script src="https://cdnjs.cloudfare.com/ajax/libs/three.js/r126/three.js" crossorigin="anonymous"></script>
-    <title>Hit Test1</title>
+  
+    <title>Hit Test Nisha</title>
   </head>
   <body>
+    <header>
+      <details open>
+        <summary>Hit Test</summary>
+        <p>
+          This sample demonstrates the use of hit testing to place virtual objects on real-world surfaces.
+          <a class="back" href="./">Back</a>
+        </p>
+      </details>
+    </header>
     <script type="module">
-      import {ARButton} from 'https://unpkg.com/three@0.126.0/examples/jsm/webxr/ARbutton.js';
+      import {WebXRButton} from './js/util/webxr-button.js';
       import {Scene} from './js/render/scenes/scene.js';
       import {Renderer, createWebGLContext} from './js/render/core/renderer.js';
       import {Node} from './js/render/core/node.js';
@@ -183,8 +193,12 @@
 
         scene.endFrame();
       }
-       initXR();
+
       // Start the XR application.
-     </script>
+      initXR();
+    </script>
   </body>
 </html>
+  
+  
+  
