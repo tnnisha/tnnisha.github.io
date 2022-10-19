@@ -1,85 +1,79 @@
-<!DOCTYPE html>
-<html lang="en">
-   <head>
-    <title>WebXR - Nisha 1</title>      
-  <script type="module">
-      import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
-      import {WebXRButton} from '../js/util/webxr-button.js';
-      import {hitTest, filterHitTestResults} from '../js/hit-test.js';
+<!doctype html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+    <meta name='mobile-web-app-capable' content='yes'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
+    <link rel='icon' type='image/png' sizes='32x32' href='favicon-32x32.png'>
+    <link rel='icon' type='image/png' sizes='96x96' href='favicon-96x96.png'>
+    <link rel='stylesheet' href='css/common.css'>
 
-      const usePlaneOrigin = document.getElementById('usePlaneOrigin');
+    <title>Hit Test</title>
+  </head>
+  <body>
+    <header>
+      <details open>
+        <summary>Hit Test Nisha</summary>
+        <p>
+          This sample demonstrates the use of hit testing to place virtual objects on real-world surfaces.
+          <a class="back" href="./">Back</a>
+        </p>
+      </details>
+    </header>
+    <script type="module">
+      import {WebXRButton} from './js/util/webxr-button.js';
+      import {Scene} from './js/render/scenes/scene.js';
+      import {Renderer, createWebGLContext} from './js/render/core/renderer.js';
+      import {Node} from './js/render/core/node.js';
+      import {Gltf2Node} from './js/render/nodes/gltf2.js';
+      import {DropShadowNode} from './js/render/nodes/drop-shadow.js';
+      import {vec3} from './js/render/math/gl-matrix.js';
+      import {Ray} from './js/render/math/ray.js';
 
-      const allPlaneOrigins = [];
-      usePlaneOrigin.addEventListener('input', element =>{
-        console.log("Changing state of plane origins");
-        allPlaneOrigins.forEach(group => {
-          group.visible = usePlaneOrigin.checked
-        });
-      });
-
-      // Suppress XR events for interactions with the DOM overlay
-      document.querySelector('header').addEventListener('beforexrselect', (ev) => {
-        console.log(ev.type);
-        ev.preventDefault();
-      });
-
+      // XR globals.
       let xrButton = null;
+      let xrRefSpace = null;
+      let xrViewerSpace = null;
+      let xrHitTestSource = null;
 
-      let container;
-      let camera, scene, renderer;
+      // WebGL scene globals.
+      let gl = null;
+      let renderer = null;
+      let scene = new Scene();
+      scene.enableStats(false);
 
-      let reticle;
-      // hitResult will be set when reticle is visible:
-      let hitResult;
+      let arObject = new Node();
+      arObject.visible = false;
+      scene.addNode(arObject);
 
-      const planeMaterials = [];
-      const lineMaterials = [
-        new THREE.LineBasicMaterial({color: 0xff0000}),
-        new THREE.LineBasicMaterial({color: 0x00ff00}),
-        new THREE.LineBasicMaterial({color: 0x0000ff}),
-      ];
+      let flower = new Gltf2Node({url: 'media/gltf/sunflower/sunflower.gltf'});
+      arObject.addNode(flower);
 
-      const lineGeometries = [
-        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(5,0,0)]),
-        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,5,0)]),
-        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,5)]),
-      ];
+      let reticle = new Gltf2Node({url: 'media/gltf/reticle/reticle.gltf'});
+      reticle.visible = false;
+      scene.addNode(reticle);
 
-      const baseOriginGroup = new THREE.Group();
-      baseOriginGroup.add(new THREE.Line(lineGeometries[0], lineMaterials[0]));
-      baseOriginGroup.add(new THREE.Line(lineGeometries[1], lineMaterials[1]));
-      baseOriginGroup.add(new THREE.Line(lineGeometries[2], lineMaterials[2]));
+      // Having a really simple drop shadow underneath an object helps ground
+      // it in the world without adding much complexity.
+      let shadow = new DropShadowNode();
+      vec3.set(shadow.scale, 0.15, 0.15, 0.15);
+      arObject.addNode(shadow);
 
-      init();
+      const MAX_FLOWERS = 30;
+      let flowers = [];
 
-      function init() {
+      // Ensure the background is transparent for AR.
+      scene.clear = false;
 
-        container = document.createElement('div');
-        document.body.appendChild(container);
-
-        scene = new THREE.Scene();
-
-        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-        light.position.set(0.5, 1, 0.25);
-        scene.add(light);
-
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight );
-        renderer.xr.enabled = true;
-        renderer.autoClear = false;
-        container.appendChild(renderer.domElement);
-
+      function initXR() {
         xrButton = new WebXRButton({
           onRequestSession: onRequestSession,
           onEndSession: onEndSession,
           textEnterXRTitle: "START AR",
           textXRNotFoundTitle: "AR NOT FOUND",
-          textExitXRTitle: "EXIT AR",
+          textExitXRTitle: "EXIT  AR",
         });
-
         document.querySelector('header').appendChild(xrButton.domElement);
 
         if (navigator.xr) {
@@ -88,292 +82,119 @@
             xrButton.enabled = supported;
           });
         }
-
-        reticle = new THREE.Mesh(
-          new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
-          new THREE.MeshBasicMaterial()
-        );
-        reticle.matrixAutoUpdate = false;
-        reticle.visible = false;
-        scene.add(reticle);
-
-        const loadManager = new THREE.LoadingManager();
-        const loader = new THREE.TextureLoader(loadManager);
-        const gridTexture = loader.load('https://raw.githubusercontent.com/google-ar/arcore-android-sdk/c684bbda37e44099c273c3e5274fae6fccee293c/samples/hello_ar_c/app/src/main/assets/models/trigrid.png');
-        gridTexture.wrapS = THREE.RepeatWrapping;
-        gridTexture.wrapT = THREE.RepeatWrapping;
-
-        const createPlaneMaterial = (params) => 
-          new THREE.MeshBasicMaterial(Object.assign(params, {
-            map: gridTexture,
-            opacity: 0.5,
-            transparent: true,
-          }));
-        planeMaterials.push(createPlaneMaterial({color: 0xff0000}));
-        planeMaterials.push(createPlaneMaterial({color: 0x00ff00}));
-        planeMaterials.push(createPlaneMaterial({color: 0x0000ff}));
-        planeMaterials.push(createPlaneMaterial({color: 0xffff00}));
-        planeMaterials.push(createPlaneMaterial({color: 0x00ffff}));
-        planeMaterials.push(createPlaneMaterial({color: 0xff00ff}));
-
-        window.addEventListener('resize', onWindowResize);
       }
 
       function onRequestSession() {
-        let sessionInit = {
-          requiredFeatures: ['anchors', 'plane-detection'],
-          optionalFeatures: [],
-        };
-        if (useDomOverlay.checked) {
-          sessionInit.optionalFeatures.push('dom-overlay');
-          sessionInit.domOverlay = {root: document.body};
-        }
-        navigator.xr.requestSession('immersive-ar', sessionInit).then((session) => {
-          session.mode = 'immersive-ar';
+        return navigator.xr.requestSession('immersive-ar', {requiredFeatures: ['local', 'hit-test']})
+                           .then((session) => {
           xrButton.setSession(session);
           onSessionStarted(session);
         });
       }
 
       function onSessionStarted(session) {
-        useDomOverlay.disabled = true;
         session.addEventListener('end', onSessionEnded);
         session.addEventListener('select', onSelect);
 
-        renderer.xr.setReferenceSpaceType('local');
-        renderer.xr.setSession(session);
+        if (!gl) {
+          gl = createWebGLContext({
+            xrCompatible: true
+          });
 
-        renderer.setAnimationLoop(render);
+          renderer = new Renderer(gl);
+
+          scene.setRenderer(renderer);
+        }
+
+        session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl) });
+
+        // In this sample we want to cast a ray straight out from the viewer's
+        // position and render a reticle where it intersects with a real world
+        // surface. To do this we first get the viewer space, then create a
+        // hitTestSource that tracks it.
+        session.requestReferenceSpace('viewer').then((refSpace) => {
+          xrViewerSpace = refSpace;
+          session.requestHitTestSource({ space: xrViewerSpace }).then((hitTestSource) => {
+            xrHitTestSource = hitTestSource;
+          });
+        });
+
+        session.requestReferenceSpace('local').then((refSpace) => {
+          xrRefSpace = refSpace;
+
+          session.requestAnimationFrame(onXRFrame);
+        });
       }
 
       function onEndSession(session) {
+        xrHitTestSource.cancel();
+        xrHitTestSource = null;
         session.end();
       }
 
       function onSessionEnded(event) {
-        useDomOverlay.disabled = false;
         xrButton.setSession(null);
-
-        renderer.setAnimationLoop(null);
-        renderer.xr.setSession(null)
       }
 
-      function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
+      // Adds a new object to the scene at the
+      // specified transform.
+      function addARObjectAt(matrix) {
+        let newFlower = arObject.clone();
+        newFlower.visible = true;
+        newFlower.matrix = matrix;
+        scene.addNode(newFlower);
 
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      }
+        flowers.push(newFlower);
 
-      let anchorId = 1;
-      let allAnchors = new Map();
-
-      function processAnchors(timestamp, frame) {
-        const referenceSpace = renderer.xr.getReferenceSpace();
-
-        if (frame.trackedAnchors) {
-          allAnchors.forEach((anchorContext, anchor) => {
-            if (!frame.trackedAnchors.has(anchor)) {
-              // anchor was removed
-              allAnchors.delete(anchor);
-              console.debug("Anchor no longer tracked, id=" + anchorContext.id);
-
-              scene.remove(anchorContext.mesh);
-            }
-          });
-
-          frame.trackedAnchors.forEach(anchor => {
-            if (allAnchors.has(anchor)) {
-              const anchorContext = allAnchors.get(anchor);
-              const anchorPose = frame.getPose(anchor.anchorSpace, referenceSpace);
-              // update pose
-              if (anchorPose) {
-                anchorContext.mesh.visible = true;
-                anchorContext.mesh.matrix.fromArray(anchorPose.transform.matrix);
-              } else {
-                anchorContext.mesh.visible = false;
-              }
-            } else {
-              console.error("New anchors should be processed in a createAnchor(...).then() promise");
-            }
-          });
+        // For performance reasons if we add too many objects start
+        // removing the oldest ones to keep the scene complexity
+        // from growing too much.
+        if (flowers.length > MAX_FLOWERS) {
+          let oldFlower = flowers.shift();
+          scene.removeNode(oldFlower);
         }
       }
 
-      const geometry = new THREE.CylinderGeometry(0.1, 0.1, 0.2, 32).translate(0, 0.1, 0);
-
+      let rayOrigin = vec3.create();
+      let rayDirection = vec3.create();
       function onSelect(event) {
         if (reticle.visible) {
-          const material = new THREE.MeshPhongMaterial({ color: 0xffffff * Math.random()});
-          const mesh = new THREE.Mesh(geometry, material);
-          mesh.scale.y = Math.random() * 2 + 1;
-          mesh.visible = false;
-          mesh.matrixAutoUpdate = false;
-
-          // Reticle matrix is expressed relative to `referenceSpace`, but we need to
-          // pass a pose relative to the plane space. Luckily, our JS-side hit test
-          // contains that information as well.
-          event.frame.createAnchor(
-            new XRRigidTransform(hitResult.point_on_plane),
-            hitResult.plane.planeSpace)
-          .then((anchor) => {
-            scene.add(mesh);
-
-            // new anchor created:
-            const anchorContext = {
-              id: anchorId,
-              mesh: mesh,
-            }
-
-            allAnchors.set(anchor, anchorContext);
-            console.debug("New anchor created, id=" + anchorId);
-            anchorId++;
-          });
+          // The reticle should already be positioned at the latest hit point, 
+          // so we can just use it's matrix to save an unnecessary call to 
+          // event.frame.getHitTestResults.
+          addARObjectAt(reticle.matrix);
         }
       }
 
-      function createGeometryFromPolygon(polygon) {
-        const geometry = new THREE.BufferGeometry();
+      // Called every time a XRSession requests that a new frame be drawn.
+      function onXRFrame(t, frame) {
+        let session = frame.session;
+        let pose = frame.getViewerPose(xrRefSpace);
 
-        const vertices = [];
-        const uvs = [];
-        polygon.forEach(point => {
-          vertices.push(point.x, point.y, point.z);
-          uvs.push(point.x, point.z);
-        })
+        reticle.visible = false;
 
-        const indices = [];
-        for(let i = 2; i < polygon.length; ++i) {
-          indices.push(0, i-1, i);
-        }
-
-        geometry.setAttribute('position',
-          new THREE.BufferAttribute(new Float32Array(vertices), 3));
-        geometry.setAttribute('uv',
-          new THREE.BufferAttribute(new Float32Array(uvs), 2))
-        geometry.setIndex(indices);
-
-        return geometry;
-      }
-
-      let planeId = 1;
-      let allPlanes = new Map();
-      function processPlanes(timestamp, frame) {
-        const referenceSpace = renderer.xr.getReferenceSpace();
-
-        if (frame.detectedPlanes) {
-          allPlanes.forEach((planeContext, plane) => {
-            if (!frame.detectedPlanes.has(plane)) {
-              // plane was removed
-              allPlanes.delete(plane);
-              console.debug("Plane no longer tracked, id=" + planeContext.id);
-
-              scene.remove(planeContext.mesh);
-            }
-          });
-
-          frame.detectedPlanes.forEach(plane => {
-            const planePose = frame.getPose(plane.planeSpace, referenceSpace);
-            let planeMesh;
-
-            if (allPlanes.has(plane)) {
-              // may have been updated:
-              const planeContext = allPlanes.get(plane);
-              planeMesh = planeContext.mesh;
-
-              if (planeContext.timestamp < plane.lastChangedTime) {
-                // updated!
-                planeContext.timestamp = plane.lastChangedTime;
-
-                const geometry = createGeometryFromPolygon(plane.polygon);
-                planeContext.mesh.geometry.dispose();
-                planeContext.mesh.geometry = geometry;
-              }
-            } else {
-              // new plane
-              
-              // Create geometry:
-              const geometry = createGeometryFromPolygon(plane.polygon);
-              planeMesh = new THREE.Mesh(geometry,
-                planeMaterials[planeId % planeMaterials.length]
-              );
-              
-              planeMesh.matrixAutoUpdate = false;
-
-              scene.add(planeMesh);
-
-              // Create plane origin visualizer:
-              const originGroup = baseOriginGroup.clone();
-              originGroup.visible = usePlaneOrigin.checked;
-
-              planeMesh.add(originGroup);
-              allPlaneOrigins.push(originGroup);
-
-              const planeContext = {
-                id: planeId,
-                timestamp: plane.lastChangedTime,
-                mesh: planeMesh,
-                origin: originGroup,
-              };
-
-              allPlanes.set(plane, planeContext);
-              console.debug("New plane detected, id=" + planeId);
-              planeId++;
-            }
-
-            if (planePose) {
-              planeMesh.visible = true;
-              planeMesh.matrix.fromArray(planePose.transform.matrix);
-            } else {
-              planeMesh.visible = false;
-            }
-          });
-        }
-      }
-
-      function render(timestamp, frame) {
-        if (frame) {
-          processAnchors(timestamp, frame);
-          processPlanes(timestamp, frame);
-
-          const referenceSpace = renderer.xr.getReferenceSpace();
-          const session = renderer.xr.getSession();
-
-          reticle.visible = false;
-          hitResult = null;
-
-          const pose = frame.getViewerPose(referenceSpace);
-          if (pose) {
-            const ray = new XRRay(pose.transform);
-
-            // Perform a JS-side hit test against mathematical (infinte) planes:
-            const hitTestResults = hitTest(frame, ray, referenceSpace);
-            // Filter results down to the ones that fall within plane's polygon:
-            const hitTestFiltered = filterHitTestResults(hitTestResults);
-
-            if (hitTestFiltered && hitTestFiltered.length > 0) {
-              hitResult = hitTestFiltered[0];
-
-              const hitMatrix = hitResult.hitMatrix;
-
-              hitMatrix[12] += 0.001; // move the reticle slightly away from the plane
-              hitMatrix[13] += 0.001; // center to prevent z-fighting with plane meshes
-              hitMatrix[14] += 0.001;
-
-              reticle.visible = true;
-
-              reticle.matrix.fromArray(hitMatrix);
-            }
+        // If we have a hit test source, get its results for the frame
+        // and use the pose to display a reticle in the scene.
+        if (xrHitTestSource && pose) {
+          let hitTestResults = frame.getHitTestResults(xrHitTestSource);
+          if (hitTestResults.length > 0) {
+            let pose = hitTestResults[0].getPose(xrRefSpace);
+            reticle.visible = true;
+            reticle.matrix = pose.transform.matrix;
           }
-
-          renderer.render(scene, camera);
         }
+
+        scene.startFrame();
+
+        session.requestAnimationFrame(onXRFrame);
+
+        scene.drawXRFrame(frame, pose);
+
+        scene.endFrame();
       }
 
-   </script>
-  <body>
- Hello 2
-</body>
+      // Start the XR application.
+      initXR();
+    </script>
+  </body>
 </html>
-
-    
